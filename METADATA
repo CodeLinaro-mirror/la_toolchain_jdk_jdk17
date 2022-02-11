@@ -1,0 +1,17 @@
+name: "toolchain/jdk/jdk17"
+description:
+    "Source for OpenJDK17"
+
+third_party {
+  url {
+    type: HOMEPAGE
+    value: "https://github.com/openjdk/jdk17u"
+  }
+  url {
+    type: GIT
+    value: "https://github.com/openjdk/openjdk-jdk17u.git"
+  }
+  version: "jdk-17.0.2-ga",
+  last_upgrade_date { year: 2022 month: 2 day: 11 }
+  license_type: RESTRICTED
+}
