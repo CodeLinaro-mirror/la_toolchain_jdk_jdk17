@@ -211,13 +211,8 @@ AC_DEFUN_ONCE([FLAGS_SETUP_USER_SUPPLIED_FLAGS],
 AC_DEFUN([FLAGS_SETUP_SYSROOT_FLAGS],
 [
   if test "x[$]$1SYSROOT" != "x"; then
-    if test "x$TOOLCHAIN_TYPE" = xgcc; then
-      $1SYSROOT_CFLAGS="--sysroot=[$]$1SYSROOT"
-      $1SYSROOT_LDFLAGS="--sysroot=[$]$1SYSROOT"
-    elif test "x$TOOLCHAIN_TYPE" = xclang; then
-      $1SYSROOT_CFLAGS="-isysroot [$]$1SYSROOT"
-      $1SYSROOT_LDFLAGS="-isysroot [$]$1SYSROOT"
-    fi
+    $1SYSROOT_CFLAGS="--sysroot=[$]$1SYSROOT"
+    $1SYSROOT_LDFLAGS="--sysroot=[$]$1SYSROOT"
   fi
 
   if test "x$OPENJDK_TARGET_OS" = xmacosx; then
