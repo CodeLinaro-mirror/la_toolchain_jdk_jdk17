@@ -633,16 +633,22 @@ bool os::create_thread(Thread* thread, ThreadType thr_type,
   ThreadState state;
 
   {
+
+    ResourceMark rm;
     pthread_t tid;
-    int ret = pthread_create(&tid, &attr, (void* (*)(void*)) thread_native_entry, thread);
+    int ret = 0;
+    int limit = 3;
+    do {
+      ret = pthread_create(&tid, &attr, (void* (*)(void*)) thread_native_entry, thread);
+    } while (ret == EAGAIN && limit-- > 0);
 
     char buf[64];
     if (ret == 0) {
-      log_info(os, thread)("Thread started (pthread id: " UINTX_FORMAT ", attributes: %s). ",
-        (uintx) tid, os::Posix::describe_pthread_attr(buf, sizeof(buf), &attr));
+      log_info(os, thread)("Thread \"%s\" started (pthread id: " UINTX_FORMAT ", attributes: %s). ",
+                           thread->name(), (uintx) tid, os::Posix::describe_pthread_attr(buf, sizeof(buf), &attr));
     } else {
-      log_warning(os, thread)("Failed to start thread - pthread_create failed (%s) for attributes: %s.",
-        os::errno_name(ret), os::Posix::describe_pthread_attr(buf, sizeof(buf), &attr));
+      log_warning(os, thread)("Failed to start thread \"%s\" - pthread_create failed (%s) for attributes: %s.",
+                              thread->name(), os::errno_name(ret), os::Posix::describe_pthread_attr(buf, sizeof(buf), &attr));
       // Log some OS information which might explain why creating the thread failed.
       log_info(os, thread)("Number of threads approx. running in the VM: %d", Threads::number_of_threads());
       LogStream st(Log(os, thread)::info());
@@ -903,6 +909,17 @@ int os::current_process_id() {
 
 const char* os::dll_file_extension() { return JNI_LIB_SUFFIX; }
 
+static int local_dladdr(const void* addr, Dl_info* info) {
+#ifdef __APPLE__
+  if (addr == (void*)-1) {
+    // dladdr() in macOS12/Monterey returns success for -1, but that addr
+    // value should not be allowed to work to avoid confusion.
+    return 0;
+  }
+#endif
+  return dladdr(addr, info);
+}
+
 // This must be hard coded because it's the system's temporary
 // directory not the java application's temp directory, ala java.io.tmpdir.
 #ifdef __APPLE__
@@ -942,9 +959,6 @@ bool os::address_is_in_vm(address addr) {
   return false;
 }
 
-
-#define MACH_MAXSYMLEN 256
-
 bool os::dll_address_to_function_name(address addr, char *buf,
                                       int buflen, int *offset,
                                       bool demangle) {
@@ -952,9 +966,8 @@ bool os::dll_address_to_function_name(address addr, char *buf,
   assert(buf != NULL, "sanity check");
 
   Dl_info dlinfo;
-  char localbuf[MACH_MAXSYMLEN];
 
-  if (dladdr((void*)addr, &dlinfo) != 0) {
+  if (local_dladdr((void*)addr, &dlinfo) != 0) {
     // see if we have a matching symbol
     if (dlinfo.dli_saddr != NULL && dlinfo.dli_sname != NULL) {
       if (!(demangle && Decoder::demangle(dlinfo.dli_sname, buf, buflen))) {
@@ -963,6 +976,14 @@ bool os::dll_address_to_function_name(address addr, char *buf,
       if (offset != NULL) *offset = addr - (address)dlinfo.dli_saddr;
       return true;
     }
+
+#ifndef __APPLE__
+    // The 6-parameter Decoder::decode() function is not implemented on macOS.
+    // The Mach-O binary format does not contain a "list of files" with address
+    // ranges like ELF. That makes sense since Mach-O can contain binaries for
+    // than one instruction set so there can be more than one address range for
+    // each "file".
+
     // no matching symbol so try for just file info
     if (dlinfo.dli_fname != NULL && dlinfo.dli_fbase != NULL) {
       if (Decoder::decode((address)(addr - (address)dlinfo.dli_fbase),
@@ -971,6 +992,10 @@ bool os::dll_address_to_function_name(address addr, char *buf,
       }
     }
 
+#else  // __APPLE__
+    #define MACH_MAXSYMLEN 256
+
+    char localbuf[MACH_MAXSYMLEN];
     // Handle non-dynamic manually:
     if (dlinfo.dli_fbase != NULL &&
         Decoder::decode(addr, localbuf, MACH_MAXSYMLEN, offset,
@@ -980,6 +1005,9 @@ bool os::dll_address_to_function_name(address addr, char *buf,
       }
       return true;
     }
+
+    #undef MACH_MAXSYMLEN
+#endif  // __APPLE__
   }
   buf[0] = '\0';
   if (offset != NULL) *offset = -1;
@@ -994,7 +1022,7 @@ bool os::dll_address_to_library_name(address addr, char* buf,
 
   Dl_info dlinfo;
 
-  if (dladdr((void*)addr, &dlinfo) != 0) {
+  if (local_dladdr((void*)addr, &dlinfo) != 0) {
     if (dlinfo.dli_fname != NULL) {
       jio_snprintf(buf, buflen, "%s", dlinfo.dli_fname);
     }
@@ -1392,13 +1420,17 @@ void os::get_summary_cpu_info(char* buf, size_t buflen) {
       strncpy(machine, "", sizeof(machine));
   }
 
-  const char* emulated = "";
 #if defined(__APPLE__) && !defined(ZERO)
   if (VM_Version::is_cpu_emulated()) {
-    emulated = " (EMULATED)";
+    snprintf(buf, buflen, "\"%s\" %s (EMULATED) %d MHz", model, machine, mhz);
+  } else {
+    NOT_AARCH64(snprintf(buf, buflen, "\"%s\" %s %d MHz", model, machine, mhz));
+    // aarch64 CPU doesn't report its speed
+    AARCH64_ONLY(snprintf(buf, buflen, "\"%s\" %s", model, machine));
   }
+#else
+  snprintf(buf, buflen, "\"%s\" %s %d MHz", model, machine, mhz);
 #endif
-  snprintf(buf, buflen, "\"%s\" %s%s %d MHz", model, machine, emulated, mhz);
 }
 
 void os::print_memory_info(outputStream* st) {

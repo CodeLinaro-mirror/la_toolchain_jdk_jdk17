@@ -995,7 +995,7 @@ bool WhiteBox::validate_cgroup(const char* proc_cgroups,
                                const char* proc_self_cgroup,
                                const char* proc_self_mountinfo,
                                u1* cg_flags) {
-  CgroupInfo cg_infos[4];
+  CgroupInfo cg_infos[CG_INFO_LENGTH];
   return CgroupSubsystemFactory::determine_type(cg_infos, proc_cgroups,
                                                     proc_self_cgroup,
                                                     proc_self_mountinfo, cg_flags);
@@ -2006,6 +2006,14 @@ WB_ENTRY(jboolean, WB_IsJFRIncluded(JNIEnv* env))
 #endif // INCLUDE_JFR
 WB_END
 
+WB_ENTRY(jboolean, WB_IsDTraceIncluded(JNIEnv* env))
+#if defined(DTRACE_ENABLED)
+  return true;
+#else
+  return false;
+#endif // DTRACE_ENABLED
+WB_END
+
 #if INCLUDE_CDS
 
 WB_ENTRY(jint, WB_GetOffsetForName(JNIEnv* env, jobject o, jstring name))
@@ -2586,6 +2594,7 @@ static JNINativeMethod methods[] = {
   {CC"areOpenArchiveHeapObjectsMapped",   CC"()Z",    (void*)&WB_AreOpenArchiveHeapObjectsMapped},
   {CC"isCDSIncluded",                     CC"()Z",    (void*)&WB_IsCDSIncluded },
   {CC"isJFRIncluded",                     CC"()Z",    (void*)&WB_IsJFRIncluded },
+  {CC"isDTraceIncluded",                  CC"()Z",    (void*)&WB_IsDTraceIncluded },
   {CC"isC2OrJVMCIIncluded",               CC"()Z",    (void*)&WB_isC2OrJVMCIIncluded },
   {CC"isJVMCISupportedByGC",              CC"()Z",    (void*)&WB_IsJVMCISupportedByGC},
   {CC"isJavaHeapArchiveSupported",        CC"()Z",    (void*)&WB_IsJavaHeapArchiveSupported },

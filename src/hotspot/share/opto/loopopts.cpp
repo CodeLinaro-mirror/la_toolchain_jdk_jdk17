@@ -1174,6 +1174,16 @@ bool PhaseIdealLoop::identical_backtoback_ifs(Node *n) {
   if (!n->in(0)->is_Region()) {
     return false;
   }
+
+  IfNode* n_if = n->as_If();
+  if (n_if->proj_out(0)->outcnt() > 1 || n_if->proj_out(1)->outcnt() > 1) {
+    // Removing the dominated If node by using the split-if optimization does not work if there are data dependencies.
+    // Some data dependencies depend on its immediate dominator If node and should not be separated from it (e.g. null
+    // checks, division by zero checks etc.). Bail out for now until data dependencies are correctly handled when
+    // optimizing back-to-back ifs.
+    return false;
+  }
+
   Node* region = n->in(0);
   Node* dom = idom(region);
   if (!dom->is_If() || dom->in(1) != n->in(1)) {
@@ -3717,6 +3727,8 @@ void PhaseIdealLoop::reorg_offsets(IdealLoopTree *loop) {
       Node *neg_stride = _igvn.intcon(-cle->stride_con());
       set_ctrl(neg_stride, C->root());
       Node *post = new AddINode(opaq, neg_stride);
+      register_new_node(post, c);
+      post = new CastIINode(post, phi->bottom_type()); // preserve the iv phi's type
       register_new_node(post, c);
       _igvn.rehash_node_delayed(use);
       for (uint j = 1; j < use->req(); j++) {

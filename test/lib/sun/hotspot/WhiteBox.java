@@ -311,7 +311,7 @@ public class WhiteBox {
     makeMethodNotCompilable0(method, compLevel, isOsr);
   }
   public        int     getMethodCompilationLevel(Executable method) {
-    return getMethodCompilationLevel(method, false /*not ost*/);
+    return getMethodCompilationLevel(method, false /*not osr*/);
   }
   private native int     getMethodCompilationLevel0(Executable method, boolean isOsr);
   public         int     getMethodCompilationLevel(Executable method, boolean isOsr) {
@@ -595,6 +595,7 @@ public class WhiteBox {
   public native boolean areSharedStringsIgnored();
   public native boolean isCDSIncluded();
   public native boolean isJFRIncluded();
+  public native boolean isDTraceIncluded();
   public native boolean isJavaHeapArchiveSupported();
   public native Object  getResolvedReferences(Class<?> c);
   public native void    linkClass(Class<?> c);
